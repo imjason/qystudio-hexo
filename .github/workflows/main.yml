@@ -1,0 +1,75 @@
+name: Deploy # 部署
+ 
+on: # 触发条件
+  push:
+    branches:
+      - dev # 推送到 main 分支（这里的分支名很重要，不要弄错了）
+ 
+  release:
+    types:
+      - published # 推送新版本号
+ 
+  workflow_dispatch: # 手动触发
+ 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+ 
+    steps:
+    - name: Checkout # Checkout 仓库
+      uses: actions/checkout@v3
+      with:
+        ref: dev
+ 
+    - name: Setup Node # 安装 Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: "14.x"
+ 
+    - name: Install Hexo # 安装 Hexo与相关依赖
+      run: |
+        npm install hexo-cli -g
+        npm install -g gulp
+
+    - name: Cache Modules # 缓存 Node 插件
+      uses: actions/cache@v2.1.1
+      id: cache-modules
+      with:
+        path: node_modules
+        key: ${{runner.OS}}-${{hashFiles('**/package-lock.json')}}
+ 
+    - name: Install Dependencies # 如果没有缓存或 插件有更新，则安装插件
+      if: steps.cache-modules.outputs.cache-hit != 'true'
+      run: | # **如果仓库里没有 package-lock.json，上传一下，npm ci 必须要有 package-lock.json**
+        npm ci
+
+    - name: Setting themes
+      run: |
+        git submodule init
+        git submodule update
+
+    - name: Setting Token
+      run: |
+        sed -i "s/.Baidu_Token/${{ secrets.BAIDU_TOKEN }}/" _config.yml
+        sed -i "s/.Baidu_Analytics_Key/${{ secrets.BAIDU_ANALYTICS_KEY }}/" _config.yml
+        sed -i "s/.Tencent_Aegis_Id/${{ secrets.TENCENT_AEGIS_ID }}/" _config.yml
+
+    - name: Generate # 生成
+      run: |
+        hexo clean
+        hexo recommend
+        hexo generate
+        gulp
+        rm -rf media
+        rm -rf libs
+        git clone https://github.com/${{ secrets.GH_NAME }}/${{ secrets.GH_NAME }}.github.io.git .public
+        
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        personal_token: ${{ secrets.PERSONAL_TOKEN }}
+        publish_dir: ./public
+        external_repository: ${{ secrets.GH_NAME }}/${{ secrets.GH_NAME }}.github.io
+        publish_branch: master
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
