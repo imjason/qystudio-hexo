@@ -17,7 +17,7 @@ jobs:
  
     steps:
     - name: Checkout # Checkout 仓库
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: dev
  
